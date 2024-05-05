@@ -8,6 +8,9 @@ defmodule Rlopzc.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      # Start libcluster,
+      {Cluster.Supervisor,
+       [Application.get_env(:libcluster, :topologies), [name: Rlopezc.ClusterSupervisor]]},
       # Start the RateLimit cache
       Rlopzc.RateLimiter
     ]

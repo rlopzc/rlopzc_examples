@@ -18,7 +18,7 @@ defmodule Rlopzc.RateLimiter do
       :allow
   """
   @spec check_rate(key(), [opt()]) :: :allow | :deny
-  def check_rate(key, opts) do
+  def check_rate(key, opts \\ []) do
     seconds = Keyword.get(opts, :seconds, 60)
     limit = Keyword.get(opts, :limit, 10)
 
