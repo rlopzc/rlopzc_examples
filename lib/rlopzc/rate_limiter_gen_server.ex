@@ -1,5 +1,6 @@
 defmodule Rlopzc.RateLimiterGenServer do
   use GenServer
+  # https://pspdfkit.com/blog/2022/rate-limiting-server-requests/?utm_source=pocket_reader
 
   @type key :: term()
   @type seconds :: non_neg_integer()
