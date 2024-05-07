@@ -1,10 +1,16 @@
 defmodule Rlopzc.RateLimiterGenServer do
   use GenServer
 
+  @type key :: term()
+  @type seconds :: non_neg_integer()
+  @type limit :: non_neg_integer()
+  @type opt :: {:seconds, non_neg_integer()} | {:limit, non_neg_integer()}
+
   def start_link() do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
+  @spec check_rate(key(), [opt()]) :: :allow | :deny
   def check_rate(key, opts \\ []) do
     GenServer.call(__MODULE__, {:check_rate, key, opts})
   end
@@ -12,6 +18,7 @@ defmodule Rlopzc.RateLimiterGenServer do
   # Callbacks
 
   def init(_state) do
+    schedule_clean_up()
     {:ok, %{}}
   end
 
@@ -19,29 +26,33 @@ defmodule Rlopzc.RateLimiterGenServer do
     seconds = Keyword.get(opts, :seconds, 60)
     limit = Keyword.get(opts, :limit, 10)
 
-    IO.inspect(state)
-
     {result, state} =
       Map.get_and_update(state, key, fn
         nil ->
           expires_at = DateTime.utc_now() |> DateTime.add(seconds, :second)
           {:allow, {1, expires_at}}
 
-        {count, expires_at} ->
-          if count < limit and DateTime.compare(expires_at, DateTime.utc_now()) == :gt do
-            {:allow, {count + 1, expires_at}}
-          else
-            # TODO: compare expiry
-            if count >= limit do
-              # disallow
-              {:deny, {count, expires_at}}
-            else
-              expires_at = DateTime.utc_now() |> DateTime.add(seconds, :second)
-              {:allow, {1, expires_at}}
-            end
-          end
+        {count, expires_at} when count < limit ->
+          {:allow, {count + 1, expires_at}}
+
+        {_count, _expires_at} = tuple ->
+          {:deny, tuple}
       end)
 
     {:reply, result, state}
+  end
+
+  def handle_info(:clean_expired_entries, state) do
+    schedule_clean_up()
+    now = DateTime.utc_now()
+
+    {:noreply,
+     Map.filter(state, fn {_key, {_count, expires_at}} ->
+       DateTime.compare(expires_at, now) == :gt
+     end)}
+  end
+
+  defp schedule_clean_up do
+    Process.send_after(self(), :clean_expired_entries, 1_000)
   end
 end
